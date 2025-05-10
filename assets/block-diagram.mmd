@@ -1,0 +1,35 @@
+---
+config:
+  theme: default
+---
+flowchart LR
+  subgraph PL["Physical Layer (Sensing & Actuation)"]
+    Arduino["Arduino Uno"]
+    PIR["PIR Motion Sensor (Digital Input)"]
+    Button["Door Button (Digital Input)"]
+    Temp["Temperature Sensor (TMP36 - Analog Input)"]
+    Buzzer["Buzzer (Digital Output)"]
+    LED["LED (Digital Output)"]
+    PIR -->|Motion Data| Arduino
+    Button -->|Open Command| Arduino
+    Temp -->|Temperature Data| Arduino
+    Arduino -->|Alarm Signal| Buzzer
+    Arduino -->|LED Signal| LED
+  end
+  subgraph EL["Edge Layer (Edge Computing & Data Processing)"]
+    EdgeServer["Raspberry Pi / VM (Edge Server)"]
+    SerialComm["Serial Communication Interface"]
+    PythonApp["Python Application (Main Control Logic)"]
+    DB["MySQL Database (MariaDB)"]
+    Arduino -->|Serial Communication| SerialComm
+    SerialComm --> PythonApp
+    PythonApp --> DB
+    PythonApp -->|Commands| SerialComm
+  end
+  subgraph UI["User Interface Layer (Monitoring & Interaction)"]
+    Browser["Web Browser (Client)"]
+    WebInterface["Web Interface (Flask App)"]
+    Browser --> WebInterface
+    WebInterface -->|User Input| PythonApp
+    PythonApp -->|HTTP Communication| WebInterface
+  end
