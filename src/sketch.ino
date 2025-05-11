@@ -30,19 +30,19 @@ float readTemperature() {
 }
 
 void printStatus() {
-  Serial.print(F("[STATUS] Door: "));
+  Serial.print(F("[STATUS] Door:"));
   Serial.print(doorState ? F("OPEN") : F("CLOSED"));
-  Serial.print(F(" | System: "));
+  Serial.print(F("|System:"));
   Serial.print(systemArmed ? F("ARMED") : F("DISARMED"));
-  Serial.print(F(" | Arming Phase: "));
+  Serial.print(F("|ArmingPhase:"));
   Serial.print(armingPhaseActive ? F("ACTIVE") : F("INACTIVE"));
-  Serial.print(F(" | Motion: "));
+  Serial.print(F("|Motion:"));
   Serial.print(currentPirState ? F("DETECTED") : F("NONE"));
-  Serial.print(F(" | Alarm: "));
+  Serial.print(F("|Alarm:"));
   Serial.print(alarmTriggered ? F("TRIGGERED") : F("OK"));
-  Serial.print(F(" | LED: "));
+  Serial.print(F("|LED:"));
   Serial.print(digitalRead(ALARM_LED_PIN) ? F("ON") : F("OFF"));
-  Serial.print(F(" | Temp: "));
+  Serial.print(F("|Temp:"));
   Serial.print(readTemperature());
   Serial.println(F("°C"));
 }
@@ -70,6 +70,12 @@ void loop() {
      (currentMillis - lastPirChange > pirDebounce)) {
     currentPirState = newPirState;
     lastPirChange = currentMillis;
+    
+    if (currentPirState == HIGH) {
+      Serial.println(F("[EVENT] Motion detected"));
+    } else {
+      Serial.println(F("[EVENT] Motion stopped"));
+    }
   }
 
   // Door button handling
@@ -130,7 +136,7 @@ void loop() {
       // Alarm loop
       while (alarmTriggered) {
         digitalWrite(ALARM_LED_PIN, !digitalRead(ALARM_LED_PIN));
-        Serial.println(F("[ALARM] ACTIVE "));
+        Serial.println(F("[ALARM] ACTIVE"));
         
         if (digitalRead(DOOR_BUTTON_PIN) == HIGH) {
           doorState = true;
