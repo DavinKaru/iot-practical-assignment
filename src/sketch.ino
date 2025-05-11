@@ -2,6 +2,7 @@ const int DOOR_BUTTON_PIN = 2;
 const int PIR_PIN = 3;
 const int ALARM_LED_PIN = 4;
 const int ALARM_BUZZER_PIN = 5;
+const int TEMP_SENSOR_PIN = A1;
 
 // System states
 bool systemArmed = false;
@@ -22,6 +23,12 @@ const unsigned long motionTimeout = 5000;  // 5s for testing
 const unsigned long pirDebounce = 200;     // 200ms debounce
 bool currentPirState = LOW;
 
+float readTemperature() {
+  int rawValue = analogRead(TEMP_SENSOR_PIN);
+  float voltage = rawValue * (5.0 / 1023.0);
+  return voltage * 100;
+}
+
 void printStatus() {
   Serial.print(F("[STATUS] Door: "));
   Serial.print(doorState ? F("OPEN") : F("CLOSED"));
@@ -34,7 +41,10 @@ void printStatus() {
   Serial.print(F(" | Alarm: "));
   Serial.print(alarmTriggered ? F("TRIGGERED") : F("OK"));
   Serial.print(F(" | LED: "));
-  Serial.println(digitalRead(ALARM_LED_PIN) ? F("ON") : F("OFF"));
+  Serial.print(digitalRead(ALARM_LED_PIN) ? F("ON") : F("OFF"));
+  Serial.print(F(" | Temp: "));
+  Serial.print(readTemperature());
+  Serial.println(F("°C"));
 }
 
 void setup() {
@@ -42,6 +52,7 @@ void setup() {
   pinMode(PIR_PIN, INPUT);
   pinMode(ALARM_LED_PIN, OUTPUT);
   pinMode(ALARM_BUZZER_PIN, OUTPUT);
+  pinMode(TEMP_SENSOR_PIN, INPUT);
   
   Serial.begin(9600);
   Serial.println(F("[SYSTEM] Security System Initialised"));
