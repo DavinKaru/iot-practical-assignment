@@ -1,6 +1,7 @@
 const int DOOR_BUTTON_PIN = 2;
 const int PIR_PIN = 3;
 const int ALARM_LED_PIN = 4;
+const int ALARM_BUZZER_PIN = 5;
 
 // System states
 bool systemArmed = false;
@@ -40,11 +41,13 @@ void setup() {
   pinMode(DOOR_BUTTON_PIN, INPUT);
   pinMode(PIR_PIN, INPUT);
   pinMode(ALARM_LED_PIN, OUTPUT);
+  pinMode(ALARM_BUZZER_PIN, OUTPUT);
   
   Serial.begin(9600);
   Serial.println(F("[SYSTEM] Security System Initialised"));
   Serial.println(F("[SYSTEM] Waiting for door to open..."));
   printStatus();
+  digitalWrite(ALARM_BUZZER_PIN, LOW);
 }
 
 void loop() {
@@ -67,6 +70,7 @@ void loop() {
     armingPhaseActive = false;
     alarmTriggered = false;
     digitalWrite(ALARM_LED_PIN, LOW);
+    digitalWrite(ALARM_BUZZER_PIN, LOW);
     Serial.println(F("[EVENT] Door opened! System DISARMED."));
     printStatus();
   }
@@ -108,6 +112,7 @@ void loop() {
     }
     else if (currentMillis - lastMotionTime > motionTimeout) {
       alarmTriggered = true;
+      digitalWrite(ALARM_BUZZER_PIN, HIGH);
       Serial.println(F("[ALARM] WARNING! No motion detected - ALARM TRIGGERED!"));
       printStatus();
 
@@ -120,6 +125,7 @@ void loop() {
           doorState = true;
           alarmTriggered = false;
           digitalWrite(ALARM_LED_PIN, LOW);
+          digitalWrite(ALARM_BUZZER_PIN, LOW);
           Serial.println(F("[EVENT] Door opened! Alarm stopped."));
           printStatus();
           break;
