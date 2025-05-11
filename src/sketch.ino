@@ -64,6 +64,26 @@ void setup() {
 void loop() {
   unsigned long currentMillis = millis();
   
+  if (Serial.available() > 0) {
+    String command = Serial.readStringUntil('\n');
+    command.trim();
+    
+    if (command == "RESET_SYSTEM") {
+      Serial.println(F("[SYSTEM] Received reset command from edge server"));
+      // Simulate door opening to reset the system
+      doorState = true;
+      doorHasOpened = true;
+      doorOpenTime = currentMillis;
+      systemArmed = false;
+      armingPhaseActive = false;
+      alarmTriggered = false;
+      digitalWrite(ALARM_LED_PIN, LOW);
+      digitalWrite(ALARM_BUZZER_PIN, LOW);
+      Serial.println(F("[EVENT] System reset by temperature alert! System DISARMED."));
+      printStatus();
+    }
+  }
+  
   // Debounced PIR reading
   bool newPirState = digitalRead(PIR_PIN);
   if (newPirState != currentPirState && 
