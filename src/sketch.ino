@@ -8,7 +8,7 @@ void setup() {
 }
 
 void loop() {
-  if (digitalRead(DOOR_BUTTON_PIN) == HIGH) { // Door opened
+  if (digitalRead(DOOR_BUTTON_PIN) == HIGH && !doorState) {
     doorState = true;
     doorOpenTime = millis();
     Serial.println("Door opened!");
@@ -17,9 +17,16 @@ void loop() {
   if (doorState && (millis() - doorOpenTime > 5000)) {
     doorState = false;
     Serial.println("Door closed automatically after 5 seconds");
-  } else {
-    Serial.println("Door is ");
-    Serial.println(doorState);
   }
+  
+  Serial.print("Door is ");
+  if (doorState) {
+    Serial.print("open (");
+    Serial.print((millis() - doorOpenTime) / 1000);
+    Serial.println(" seconds)");
+  } else {
+    Serial.println("closed");
+  }
+  
   delay(1000);
 }
