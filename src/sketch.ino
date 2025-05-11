@@ -17,16 +17,23 @@ unsigned long doorClosedTime = 0;
 unsigned long lastMotionTime = 0;
 unsigned long lastPirChange = 0;
 unsigned long lastStatusUpdate = 0;
+unsigned long lastTempCheck = 0;
 
 // Configuration
 const unsigned long motionTimeout = 5000;  // 5s for testing
 const unsigned long pirDebounce = 200;     // 200ms debounce
 bool currentPirState = LOW;
+const float TEMP_THRESHOLD = 27.0;
 
 float readTemperature() {
-  int rawValue = analogRead(TEMP_SENSOR_PIN);
-  float voltage = rawValue * (5.0 / 1023.0);
-  return voltage * 100;
+	int rawValue = analogRead(TEMP_SENSOR_PIN);
+	float resistance = 10000.0 * ((1023.0 / rawValue) - 1.0);
+	float steinhart = resistance / 10000.0;
+	steinhart = log(steinhart);
+	steinhart /= 3950.0;
+	steinhart += 1.0 / (25.0 + 273.15);
+	steinhart = 1.0 / steinhart;
+	return steinhart - 273.15;
 }
 
 void printStatus() {
@@ -45,6 +52,13 @@ void printStatus() {
   Serial.print(F("|Temp:"));
   Serial.print(readTemperature());
   Serial.println(F("°C"));
+}
+
+void resetAlarm() {
+  alarmTriggered = false;
+  digitalWrite(ALARM_LED_PIN, LOW);
+  digitalWrite(ALARM_BUZZER_PIN, LOW);
+  printStatus();
 }
 
 void setup() {
@@ -72,10 +86,31 @@ void loop() {
       doorOpenTime = currentMillis;
       systemArmed = false;
       armingPhaseActive = false;
-      alarmTriggered = false;
-      digitalWrite(ALARM_LED_PIN, LOW);
-      digitalWrite(ALARM_BUZZER_PIN, LOW);
-      printStatus();
+      
+      // Reset alarm state if triggered
+      if (alarmTriggered) {
+        Serial.println(F("[EVENT] Alarm reset by system command"));
+        resetAlarm();
+      } else {
+        alarmTriggered = false;
+        digitalWrite(ALARM_LED_PIN, LOW);
+        digitalWrite(ALARM_BUZZER_PIN, LOW);
+        printStatus();
+      }
+    }
+  }
+  
+  // Check temperature every second
+  if (currentMillis - lastTempCheck > 1000) {
+    float currentTemp = readTemperature();
+    lastTempCheck = currentMillis;
+    
+    // If temperature exceeds threshold and alarm is triggered, reset the alarm
+    if (currentTemp > TEMP_THRESHOLD && alarmTriggered) {
+      Serial.print(F("[EVENT] Alarm reset by high temperature: "));
+      Serial.print(currentTemp);
+      Serial.println(F("°C"));
+      resetAlarm();
     }
   }
   
@@ -147,6 +182,7 @@ void loop() {
       while (alarmTriggered) {
         digitalWrite(ALARM_LED_PIN, !digitalRead(ALARM_LED_PIN));
         
+        // Check for door button press
         if (digitalRead(DOOR_BUTTON_PIN) == HIGH) {
           doorState = true;
           alarmTriggered = false;
@@ -155,6 +191,40 @@ void loop() {
           printStatus();
           break;
         }
+        
+        // Check for serial commands during alarm state
+        if (Serial.available() > 0) {
+          String command = Serial.readStringUntil('\n');
+          command.trim();
+          
+          if (command == "RESET_SYSTEM") {
+            Serial.println(F("[EVENT] Alarm reset by system command"));
+            doorState = true;
+            doorHasOpened = true;
+            doorOpenTime = millis();
+            systemArmed = false;
+            armingPhaseActive = false;
+            alarmTriggered = false;
+            digitalWrite(ALARM_LED_PIN, LOW);
+            digitalWrite(ALARM_BUZZER_PIN, LOW);
+            printStatus();
+            break;
+          }
+        }
+        
+        // Check temperature during alarm state
+        float currentTemp = readTemperature();
+        if (currentTemp > TEMP_THRESHOLD) {
+          Serial.print(F("[EVENT] Alarm reset by high temperature: "));
+          Serial.print(currentTemp);
+          Serial.println(F("°C"));
+          alarmTriggered = false;
+          digitalWrite(ALARM_LED_PIN, LOW);
+          digitalWrite(ALARM_BUZZER_PIN, LOW);
+          printStatus();
+          break;
+        }
+        
         delay(200);
       }
     }
