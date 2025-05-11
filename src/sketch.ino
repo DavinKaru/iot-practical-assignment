@@ -13,7 +13,28 @@ bool alarmTriggered = false;
 unsigned long doorOpenTime = 0;
 unsigned long doorClosedTime = 0;
 unsigned long lastMotionTime = 0;
-const unsigned long motionTimeout = 5000;  // 10s for testing (should be 5 minutes / 300,000)
+unsigned long lastPirChange = 0;
+unsigned long lastStatusUpdate = 0;
+
+// Configuration
+const unsigned long motionTimeout = 5000;  // 5s for testing
+const unsigned long pirDebounce = 200;     // 200ms debounce
+bool currentPirState = LOW;
+
+void printStatus() {
+  Serial.print("[STATUS] Door: ");
+  Serial.print(doorState ? "OPEN" : "CLOSED");
+  Serial.print(" | System: ");
+  Serial.print(systemArmed ? "ARMED" : "DISARMED");
+  Serial.print(" | Arming Phase: ");
+  Serial.print(armingPhaseActive ? "ACTIVE" : "INACTIVE");
+  Serial.print(" | Motion: ");
+  Serial.print(currentPirState ? "DETECTED" : "NONE");
+  Serial.print(" | Alarm: ");
+  Serial.print(alarmTriggered ? "TRIGGERED" : "OK");
+  Serial.print(" | LED: ");
+  Serial.println(digitalRead(ALARM_LED_PIN) ? "ON" : "OFF");
+}
 
 void setup() {
   pinMode(DOOR_BUTTON_PIN, INPUT);
@@ -21,70 +42,98 @@ void setup() {
   pinMode(ALARM_LED_PIN, OUTPUT);
   
   Serial.begin(9600);
-  Serial.println("Security System Initialized");
-  Serial.println("Waiting for door to open...");
+  Serial.println("[SYSTEM] Security System Initialised");
+  Serial.println("[SYSTEM] Waiting for door to open...");
+  printStatus();
 }
 
 void loop() {
+  unsigned long currentMillis = millis();
+  
+  // Debounced PIR reading
+  bool newPirState = digitalRead(PIR_PIN);
+  if (newPirState != currentPirState && 
+     (currentMillis - lastPirChange > pirDebounce)) {
+    currentPirState = newPirState;
+    lastPirChange = currentMillis;
+  }
+
+  // Door button handling
   if (digitalRead(DOOR_BUTTON_PIN) == HIGH && !doorState) {
     doorState = true;
     doorHasOpened = true;
-    doorOpenTime = millis();
+    doorOpenTime = currentMillis;
     systemArmed = false;
     armingPhaseActive = false;
     alarmTriggered = false;
     digitalWrite(ALARM_LED_PIN, LOW);
-    Serial.println("Door opened! System DISARMED.");
+    Serial.println("[EVENT] Door opened! System DISARMED.");
+    printStatus();
   }
 
-  // Auto-close door after 5 seconds
-  if (doorState && (millis() - doorOpenTime > 5000)) {
+  // Auto-close door
+  if (doorState && (currentMillis - doorOpenTime > 5000)) {
     doorState = false;
-    doorClosedTime = millis();
+    doorClosedTime = currentMillis;
     armingPhaseActive = true;
-    lastMotionTime = millis();
-    Serial.println("Door closed. 5-second arming phase started.");
+    lastMotionTime = currentMillis;
+    Serial.println("[EVENT] Door closed. 5-second arming phase started.");
+    printStatus();
   }
 
-  // Arming phase logic
+  // Arming logic
   if (doorHasOpened && armingPhaseActive && !systemArmed) {
-    if (millis() - doorClosedTime <= 5000) {
-      if (digitalRead(PIR_PIN) == HIGH) {
+    if (currentMillis - doorClosedTime <= 5000) {
+      if (currentPirState == HIGH) {
         systemArmed = true;
         armingPhaseActive = false;
-        lastMotionTime = millis();  // Start safety motion monitoring
-        Serial.println("MOTION DETECTED! System ARMED.");
+        lastMotionTime = currentMillis;
+        digitalWrite(ALARM_LED_PIN, HIGH);
+        Serial.println("[EVENT] Motion detected! System ARMED.");
+        printStatus();
       }
     } 
     else {
       armingPhaseActive = false;
-      Serial.println("No motion detected. System remains DISARMED.");
+      Serial.println("[EVENT] Arming phase ended (no motion). System remains DISARMED.");
+      printStatus();
     }
   }
 
-  // Armed state monitoring
+  // Motion timeout handling
   if (systemArmed && !alarmTriggered) {
-    if (digitalRead(PIR_PIN) == HIGH) {
-      lastMotionTime = millis();
+    if (currentPirState == HIGH) {
+      lastMotionTime = currentMillis;
+      Serial.println("[ALARM] Motion detected - timer reset");
     }
-    
-    // Check for motion timeout
-    if (millis() - lastMotionTime > motionTimeout) {
+    else if (currentMillis - lastMotionTime > motionTimeout) {
       alarmTriggered = true;
-      digitalWrite(ALARM_LED_PIN, HIGH);
-      Serial.println("ALARM TRIGGERED! No motion detected for 5 minutes.");
+      Serial.println("[ALARM] WARNING! No motion detected - ALARM TRIGGERED!");
+      printStatus();
+
+      // Alarm loop
+      while (alarmTriggered) {
+        digitalWrite(ALARM_LED_PIN, !digitalRead(ALARM_LED_PIN));
+        Serial.println("[ALARM] ACTIVE ");
+        
+        if (digitalRead(DOOR_BUTTON_PIN) == HIGH) {
+          doorState = true;
+          alarmTriggered = false;
+          digitalWrite(ALARM_LED_PIN, LOW);
+          Serial.println("[EVENT] Door opened! Alarm stopped.");
+          printStatus();
+          break;
+        }
+        delay(200);
+      }
     }
   }
 
-  // Status reporting
-  Serial.print("Door: ");
-  Serial.print(doorState ? "OPEN" : "CLOSED");
-  Serial.print(" | System: ");
-  Serial.print(systemArmed ? "ARMED" : "DISARMED");
-  Serial.print(" | Motion: ");
-  Serial.print(digitalRead(PIR_PIN) ? "DETECTED" : "NONE");
-  Serial.print(" | Alarm: ");
-  Serial.println(alarmTriggered ? "ACTIVE" : "INACTIVE");
+  // Status updates
+  if (currentMillis - lastStatusUpdate > 1000) {
+    if (!alarmTriggered) printStatus();
+    lastStatusUpdate = currentMillis;
+  }
   
-  delay(1000);
+  delay(100);
 }
